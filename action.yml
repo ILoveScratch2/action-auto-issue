@@ -1,0 +1,105 @@
+name: 'Auto Issue'
+description: 'Detect spam issues and pull requests with an LLM, close them, and label the valid ones'
+author: 'action-auto-issue'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  token:
+    description: 'Token used for the repository API. Needs issues:write, pull-requests:write and contents:read.'
+    required: false
+    default: ${{ github.token }}
+  ai-base-url:
+    description: 'OpenAI compatible API base URL. Required: GitHub Models was retired on 2026-07-30, so there is no default endpoint.'
+    required: true
+  ai-key:
+    description: 'API key for the AI endpoint. Pass it from a repository secret.'
+    required: true
+  model:
+    description: 'Model name used for every check'
+    required: false
+    default: 'gpt-4o'
+  ai-api-type:
+    description: 'API flavour to speak: chat-completions or responses'
+    required: false
+    default: 'chat-completions'
+  labels:
+    description: 'Comma separated labels the AI may apply to valid issues and pull requests'
+    required: false
+    default: 'bug,enhancement,question'
+  apply-labels:
+    description: 'Add the labels the AI picks and the fixed labels of config.json outcomes: true or false'
+    required: false
+    default: 'true'
+  search-history:
+    description: 'Search past issues and pull requests for duplicates and answering material: true or false'
+    required: false
+    default: 'false'
+  language:
+    description: 'Locale of the bot comments, and the fallback language for answer-language: en or zh-CN'
+    required: false
+    default: 'en'
+  answer-language:
+    description: 'Language of the AI written answers: auto (follow the issue author), locale (the language input), en, zh or both (Chinese then English)'
+    required: false
+    default: 'auto'
+  issue-code-access:
+    description: 'How much of the project the issue checks may read: off, read (use the files for the checks) or advise (also post a fix suggestion)'
+    required: false
+    default: 'off'
+  pr-code-access:
+    description: 'How much of a pull request the checks see: off, patch (the changed lines) or full (the whole diff plus the changed files)'
+    required: false
+    default: 'patch'
+  analysis-depth:
+    description: 'How much of a pull request diff to include: light (3 files/3 lines), normal (5/5) or deep (10/10)'
+    required: false
+    default: 'normal'
+  blocked-users:
+    description: 'Comma separated logins that are closed and locked without any AI analysis'
+    required: false
+    default: ''
+  max-tokens:
+    description: 'Maximum tokens per model response'
+    required: false
+    default: '256'
+  content-max-chars:
+    description: 'Maximum characters of README and pinned issue content sent to the model'
+    required: false
+    default: '20000'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      shell: bash
+      run: python -m pip install --disable-pip-version-check --no-input "${{ github.action_path }}"
+
+    - name: Run the checks
+      shell: bash
+      env:
+        PYTHONUNBUFFERED: '1'
+        AUTO_ISSUE_ROOT: ${{ github.action_path }}
+        INPUT_TOKEN: ${{ inputs.token }}
+        INPUT_AI_BASE_URL: ${{ inputs.ai-base-url }}
+        INPUT_AI_KEY: ${{ inputs.ai-key }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_AI_API_TYPE: ${{ inputs.ai-api-type }}
+        INPUT_LABELS: ${{ inputs.labels }}
+        INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
+        INPUT_SEARCH_HISTORY: ${{ inputs.search-history }}
+        INPUT_LANGUAGE: ${{ inputs.language }}
+        INPUT_ANSWER_LANGUAGE: ${{ inputs.answer-language }}
+        INPUT_ISSUE_CODE_ACCESS: ${{ inputs.issue-code-access }}
+        INPUT_PR_CODE_ACCESS: ${{ inputs.pr-code-access }}
+        INPUT_ANALYSIS_DEPTH: ${{ inputs.analysis-depth }}
+        INPUT_BLOCKED_USERS: ${{ inputs.blocked-users }}
+        INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
+        INPUT_CONTENT_MAX_CHARS: ${{ inputs.content-max-chars }}
+      run: python -m auto_issue

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-issue"
+version = "0.1.0"
+description = "GitHub Action that detects spam issues/PRs with an LLM and routes valid ones to labels"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "PyGithub>=2.1.1",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "PyYAML>=6.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

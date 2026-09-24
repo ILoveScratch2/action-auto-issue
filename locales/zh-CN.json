@@ -1,0 +1,25 @@
+{
+  "answer_language": "Simplified Chinese",
+  "readme_answer_length": "2-3 sentences, no more than 60 Chinese characters",
+  "smart_answer_length": "1-2 sentences, no more than 40 Chinese characters",
+  "responses": {
+    "issue_spam": "🤖 该 Issue 被检测为 SPAM，将被关闭并锁定。如果你认为这是误判，请联系仓库维护者。",
+    "issue_blocked": "🤖 该 Issue 由黑名单账号提交，将被直接关闭并锁定。如果你认为这是误判，请联系仓库维护者。",
+    "issue_content_filtered": "🤖 AI 提供商的内容安全策略拒绝了该 Issue，自动检查无法继续。该 Issue 将被关闭但不锁定。如果你认为这是误判，请修改内容后重新提交，或联系仓库维护者。",
+    "issue_readme_covered": "🤖 根据以上回答，该问题已得到解决，此 Issue 将被关闭。如有其他问题，欢迎继续在此讨论。",
+    "issue_basic": "🤖 该 Issue 属于基础使用问题。请先查阅文档或自行搜索。",
+    "issue_unclear": "🤖 该 Issue 信息不足，请补充以下内容：\n\n- 问题的清晰描述\n- 预期行为与实际行为\n- 环境与版本信息\n- 复现步骤\n- 相关日志或截图",
+    "readme_answer_prefix": "🤖 根据项目文档：\n\n",
+    "unclear_answer_prefix": "🤖 根据项目文档：\n\n",
+    "pr_spam": "🤖 该 PR 被检测为 spam，将被关闭并锁定。如果你认为这是误判，请联系仓库维护者。",
+    "pr_blocked": "🤖 该 PR 由黑名单账号提交，将被直接关闭并锁定。如果你认为这是误判，请联系仓库维护者。",
+    "pr_invalid_commit": "🤖 该 PR 标题描述不清或不符合提交规范，将被关闭。如果你认为这是误判，请联系仓库维护者。",
+    "pr_malicious": "🤖 该 PR 包含可疑或恶意内容，将被关闭。如果你认为这是误判，请联系仓库维护者。",
+    "pr_trivial": "🤖 该 PR 仅包含无意义的改动，将被关闭。请确保提交能带来有价值的改进。",
+    "pr_content_filtered": "🤖 AI 提供商的内容安全策略拒绝了该 PR，自动检查无法继续。该 PR 将被关闭。如果你认为这是误判，请修改内容后重新提交，或联系仓库维护者。",
+    "issue_duplicate": "🤖 这与 #{number} 重复。请在那里继续讨论。",
+    "pr_duplicate": "🤖 这与 #{number} 重复。请在那里继续讨论。",
+    "history_answer_prefix": "🤖 根据项目文档与历史讨论：\n\n",
+    "advise_prefix": "🤖 根据项目文件，这里是可能的原因和修复建议：\n\n"
+  }
+}
