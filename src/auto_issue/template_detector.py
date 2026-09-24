@@ -17,13 +17,7 @@ TITLE_PREFIXES = (
 TEMPLATE_INDICATORS = tuple(
     re.compile(pattern, re.MULTILINE)
     for pattern in (
-        r"^### .*",
-        r"^## .*",
-        r"\*\*(.+)\*\*",
-        r"<!--.+-->",
-        r"^\s*-\s*\[[\sx]\]",
-        r"^>\s*.+",
-        r"\|\s*.+\s*\|",
+        r"^\s{0,3}#{2,6}\s+\S.*$",
     )
 )
 
@@ -137,7 +131,7 @@ def detect_template(title, body):
     total_lines = len(body.split("\n"))
 
     for prefix in TITLE_PREFIXES:
-        if prefix in title:
+        if title.strip().casefold().startswith(prefix.casefold()):
             indicators.append(f"Title prefix: {prefix}")
             indicator_count += 2
             break
@@ -164,9 +158,13 @@ def detect_template(title, body):
     if has_template:
         lowered_title = title.lower()
         lowered_body = body.lower()
-        if "bug" in lowered_title or "bug" in lowered_body:
+        if re.search(r"(?<![a-z])bug(?![a-z])", lowered_title) or re.search(
+            r"(?<![a-z])bug(?![a-z])", lowered_body
+        ):
             template_type = "bug_report"
-        elif "feature" in lowered_title or "feature" in lowered_body:
+        elif re.search(r"(?<![a-z])feature(?![a-z])", lowered_title) or re.search(
+            r"(?<![a-z])feature(?![a-z])", lowered_body
+        ):
             template_type = "feature_request"
         else:
             template_type = "generic"

@@ -291,11 +291,10 @@ def _handle_unclear(ctx, actions, analyzer, issue, readme, history="", project_f
         ):
             return
 
-    if policy["comment"]:
-        log.info(ctx.config.log_line("unclear_fallback_to_standard", number=issue.number))
-        actions.apply_outcome(
-            issue.number, ctx.config.response("issue_unclear"), "issue_unclear_log", policy
-        )
+    log.info(ctx.config.log_line("unclear_fallback_to_standard", number=issue.number))
+    actions.apply_outcome(
+        issue.number, ctx.config.response("issue_unclear"), "issue_unclear_log", policy
+    )
 
 
 def handle_new_pr(ctx, pr):

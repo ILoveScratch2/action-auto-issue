@@ -57,7 +57,7 @@ You can set `ai-api-type: responses` to use the responses API.
 | --- | --- | --- |
 | `token` | `${{ github.token }}` | Token for the repository API. |
 | `ai-base-url` | No (**required**) | OpenAI compatible base URL. |
-| `ai-key` | Np (**required**) | API key, keep it in a secret. |
+| `ai-key` | No (**required**) | API key, keep it in a secret. |
 | `model` | `gpt-4o` | Model used for every check. |
 | `ai-api-type` | `chat-completions` | `chat-completions` or `responses`. |
 | `labels` | `bug,enhancement,question` | Labels the AI may apply. |

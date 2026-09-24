@@ -7,7 +7,7 @@ name = "auto-issue"
 version = "0.1.0"
 description = "GitHub Action that detects spam issues/PRs with an LLM and routes valid ones to labels"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "MPL-2.0" }
 dependencies = [
     "PyGithub>=2.1.1",
     "requests>=2.31",

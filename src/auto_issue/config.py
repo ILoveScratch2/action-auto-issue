@@ -24,6 +24,7 @@ REQUIRED_SECTIONS = (
     "logging",
     "ai_settings",
     "defaults",
+    "analysis_depths",
 )
 OUTCOMES = (
     "issue_blocked",
@@ -192,6 +193,18 @@ def validate_config(raw):
     for name in CODE_ACCESS_NUMBERS:
         if not isinstance(raw["code_access"].get(name), int) or raw["code_access"][name] <= 0:
             raise ConfigurationError(f"config.json code_access.{name} must be a positive integer")
+    analysis_depths = raw["analysis_depths"]
+    if not isinstance(analysis_depths, dict) or not analysis_depths:
+        raise ConfigurationError("config.json analysis_depths must be a non-empty object")
+    for depth, settings in analysis_depths.items():
+        if not isinstance(settings, dict):
+            raise ConfigurationError(f"config.json analysis_depths.{depth} must be an object")
+        for name in ("max_files", "max_lines"):
+            value = settings.get(name)
+            if not isinstance(value, int) or value <= 0:
+                raise ConfigurationError(
+                    f"config.json analysis_depths.{depth}.{name} must be a positive integer"
+                )
     for name, allowed in (("issue", ISSUE_CODE_ACCESS), ("pr", PR_CODE_ACCESS)):
         if raw["code_access"].get(name) not in allowed:
             raise ConfigurationError(
@@ -314,6 +327,12 @@ def parse_inputs(environ, config):
         )
 
     base_url = _required(environ, "ai-base-url", config)
+    parsed_url = urlsplit(base_url if "://" in base_url else f"//{base_url}")
+    hostname = (parsed_url.hostname or "").lower().rstrip(".")
+    if hostname == "models.github.ai" or hostname.endswith(".models.github.ai"):
+        raise ConfigurationError(
+            "the GitHub Models endpoint was retired on 2026-07-30; configure another ai-base-url"
+        )
 
     return Inputs(
         token=_required(environ, "token", config),
