@@ -2,6 +2,8 @@
 Actions Logger
 """
 
+import os
+
 _ESCAPES = (("%", "%25"), ("\r", "%0D"), ("\n", "%0A"))
 
 
@@ -35,6 +37,18 @@ def warning(message):
 
 def error(message):
     _command("error", message)
+
+
+def summary(markdown):
+    """Appends Markdown to the job summary; a run without a summary file is left alone."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(markdown.rstrip("\n") + "\n")
+    except OSError:
+        pass
 
 
 def set_failed(message):

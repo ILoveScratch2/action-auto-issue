@@ -20,6 +20,7 @@
     "issue_duplicate": "🤖 This looks like a duplicate of #{number}. Please continue the discussion there instead.",
     "pr_duplicate": "🤖 This looks like a duplicate of #{number}. Please continue the discussion there instead.",
     "history_answer_prefix": "🤖 Based on the project documentation and past discussions:\n\n",
-    "advise_prefix": "🤖 Here is what the project files suggest:\n\n"
+    "advise_prefix": "🤖 Here is what the project files suggest:\n\n",
+    "pr_review_prefix": "🙏 Thanks @{author} for the pull request!\n🤖 AI review notice: this report was generated automatically using the {model} model.\n⚠️ The analysis may be wrong or incomplete, so corrections and other opinions are welcome.\n⚠️ Merging stays a human decision: even when the review looks good, the maintainers judge code quality, project plans, direction and available time before merging."
   }
 }

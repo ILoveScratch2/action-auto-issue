@@ -175,6 +175,23 @@ class Analyzer:
             return None
         return text if len(text) > MIN_ANSWER_LENGTH else None
 
+    def review_pr(self, *, title, body, diff, commits, file_tree="", project_files="", max_files):
+        return self._ai.complete(
+            instructions=self._config.prompt(
+                "pr_review", max_files=max_files, answer_language=self._config.answer_language
+            ),
+            payload={
+                "pullRequest": {"title": title, "body": body},
+                "fileChanges": diff,
+                "commits": commits,
+                "fileList": file_tree,
+                **_context(project_files=project_files),
+            },
+            purpose="PR code review",
+            verdict=False,
+            max_tokens=self._config.review.max_tokens,
+        )
+
     def analyze_pr(self, *, title, body, file_changes):
         log.info(self._config.logging.spam_check_start)
         spam = self.check_pr_spam(title=title, body=body, file_changes=file_changes)

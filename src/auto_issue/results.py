@@ -51,6 +51,12 @@ class IssueStatus(str, Enum):
     ANALYSIS_FAILED = "ANALYSIS_FAILED"
 
 
+class ReviewVerdict(str, Enum):
+    APPROVE = "APPROVE"
+    REQUEST_CHANGES = "REQUEST_CHANGES"
+    CLOSE = "CLOSE"
+
+
 def parse_verdict(raw, enum_cls):
     """Maps a model answer onto an enum member, or None when it is not recognized."""
     if raw is None:
@@ -94,6 +100,45 @@ def parse_file_selection(raw, available, limit):
         if len(chosen) >= limit:
             break
     return tuple(chosen)
+
+
+REVIEW_VERDICT_PREFIX = "VERDICT:"
+REVIEW_FILES_PREFIX = "REQUEST_FILES:"
+
+
+def parse_review_verdict(marker):
+    """Maps the text after ``VERDICT:`` onto a member, tolerating spacing and trailing notes."""
+    candidate = str(marker).strip().upper()
+    normalized = re.sub(r"[\s-]+", "_", candidate)
+    for member in ReviewVerdict:
+        if normalized == member.value or normalized.startswith(member.value + "_"):
+            return member
+    return None
+
+
+def parse_review_report(raw):
+    """Splits the verdict marker off the report, keeping the whole answer when there is none."""
+    text = str(raw or "").strip()
+    lines = text.splitlines()
+    if not lines or not lines[0].strip().upper().startswith(REVIEW_VERDICT_PREFIX):
+        return None, text
+    body = "\n".join(lines[1:]).strip()
+    if not body:
+        return None, text
+    marker = lines[0].strip().upper()[len(REVIEW_VERDICT_PREFIX) :]
+    return parse_review_verdict(marker), body
+
+
+def parse_review_request(raw, available, limit):
+    """Maps an answer onto the paths the reviewer asked to read, or None when it is a report.
+
+    The paths are matched against the fetched tree, so a path the model invented can never turn
+    into a file read. An empty tuple means the answer asked for files that do not exist.
+    """
+    lines = [line.strip() for line in str(raw or "").splitlines()]
+    if not lines or not lines[0].upper().startswith(REVIEW_FILES_PREFIX):
+        return None
+    return parse_file_selection("\n".join(lines[1:]), available, limit)
 
 
 @dataclass(frozen=True)

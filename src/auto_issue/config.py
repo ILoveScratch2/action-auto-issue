@@ -19,6 +19,7 @@ REQUIRED_SECTIONS = (
     "responses",
     "outcomes",
     "code_access",
+    "review",
     "history",
     "answer_languages",
     "logging",
@@ -46,6 +47,7 @@ OUTCOME_KEYS = ("comment", "close", "lock", "labels")
 HISTORY_NUMBERS = ("max_results", "max_words", "max_chars")
 ISSUE_CODE_ACCESS = ("off", "read", "advise")
 PR_CODE_ACCESS = ("off", "patch", "full")
+PR_REVIEW_MODES = ("off", "on")
 CODE_ACCESS_NUMBERS = (
     "max_files_to_read",
     "max_chars_per_file",
@@ -54,6 +56,16 @@ CODE_ACCESS_NUMBERS = (
     "max_tree_chars",
     "diff_lines",
     "advise_max_tokens",
+)
+REVIEW_NUMBERS = (
+    "max_rounds",
+    "max_files",
+    "max_chars_per_file",
+    "max_total_chars",
+    "max_diff_files",
+    "max_diff_lines",
+    "max_commits",
+    "max_tokens",
 )
 REQUIRED_PROMPTS = ("spam_detection", "readme_coverage_check", "content_quality_check", "pr_spam_detection")
 TRUE_VALUES = ("true", "1", "yes")
@@ -87,6 +99,7 @@ class Config:
     responses: Section
     outcomes: Section
     code_access: Section
+    review: Section
     history: Section
     answer_languages: Section
     logging: Section
@@ -120,6 +133,7 @@ class Inputs:
     search_history: bool
     issue_code_access: str
     pr_code_access: str
+    pr_review: str
     analysis_depth: str
     blocked_users: tuple
     max_tokens: int
@@ -144,6 +158,7 @@ def load_config(root=ACTION_ROOT):
         responses=Section(raw["responses"]),
         outcomes=Section(raw["outcomes"]),
         code_access=Section(raw["code_access"]),
+        review=Section(raw["review"]),
         history=Section(raw["history"]),
         answer_languages=Section(raw["answer_languages"]),
         logging=Section(raw["logging"]),
@@ -193,6 +208,9 @@ def validate_config(raw):
     for name in CODE_ACCESS_NUMBERS:
         if not isinstance(raw["code_access"].get(name), int) or raw["code_access"][name] <= 0:
             raise ConfigurationError(f"config.json code_access.{name} must be a positive integer")
+    for name in REVIEW_NUMBERS:
+        if not isinstance(raw["review"].get(name), int) or raw["review"][name] <= 0:
+            raise ConfigurationError(f"config.json review.{name} must be a positive integer")
     analysis_depths = raw["analysis_depths"]
     if not isinstance(analysis_depths, dict) or not analysis_depths:
         raise ConfigurationError("config.json analysis_depths must be a non-empty object")
@@ -314,6 +332,18 @@ def parse_inputs(environ, config):
             )
         )
 
+    requested_pr_review = _text(environ, "pr-review") or "off"
+    pr_review = normalize_code_access(requested_pr_review, PR_REVIEW_MODES, "off")
+    if pr_review != requested_pr_review.strip().lower():
+        log.warning(
+            config.log_line(
+                "unknown_code_access",
+                input="pr-review",
+                value=requested_pr_review,
+                fallback=pr_review,
+            )
+        )
+
     depth = (_text(environ, "analysis-depth") or config.defaults.analysis_depth).lower()
     if depth not in config.analysis_depths:
         log.warning(config.log_line("unknown_analysis_depth", depth=depth))
@@ -347,6 +377,7 @@ def parse_inputs(environ, config):
         search_history=_boolean(environ, "search-history", config.history.enabled),
         issue_code_access=issue_code_access,
         pr_code_access=pr_code_access,
+        pr_review=pr_review,
         analysis_depth=depth,
         blocked_users=tuple(user.lower() for user in _split_list(_text(environ, "blocked-users"))),
         max_tokens=_positive_int(environ, "max-tokens", config.ai_settings.max_tokens),

@@ -68,6 +68,7 @@ You can set `ai-api-type: responses` to use the responses API.
 | `issue-code-access` | `off` | `off`, `read` (the project files inform the checks) or `advise` (also post a diagnosis and fix suggestion). |
 | `pr-code-access` | `patch` | `off`, `patch` (the changed lines) or `full` (the whole diff plus the changed files). |
 | `analysis-depth` | `normal` | `light` / `normal` / `deep` |
+| `pr-review` | `off` | `on` posts an AI code review of the diff as a review comment. Never an approval, and drafts are skipped. |
 | `blocked-users` | — | Logins closed and locked without any AI call. |
 | `max-tokens` | `256` | Upper bound per model response. |
 | `content-max-chars` | `20000` | Truncation limit |
@@ -84,7 +85,7 @@ You can set `ai-api-type: responses` to use the responses API.
 
 **Pull requests** (`pull_request_target.opened`) run spam check → commit title check → quality check.
 Spam, a non descriptive title, malicious content and trivial changes are closed and locked; everything
-else gets labelled.
+else gets labelled and, with `pr-review: on`, reviewed.
 
 ### Code
 
@@ -111,6 +112,44 @@ arbitrary.
 
 `advise` writes prose rather than a verdict, so it uses its own output budget
 (`code_access.advise_max_tokens`, 700 by default) instead of `max-tokens`.
+
+### Review
+
+`pr-review: on` adds a fourth stage to the pull request path: once the three checks pass and the
+pull request is not a duplicate, the model is asked to review the change itself (functional fit,
+minimal change, backward compatibility, security, code quality) and the report is posted as a
+**review comment**. The action never approves, never requests changes and never closes on the
+review's verdict: the report carries a conclusion for the maintainer to act on.
+
+The report is written in the language `answer-language` resolves to, and framed by
+`pr_review_prefix` (`config.json`, overridden by `locales/*.json`), which names the model that
+wrote it.
+
+The reviewer is not limited to the diff. It may answer with `REQUEST_FILES:` and a list of paths
+instead of a report, and the action then reads those files **at the pull request's head commit**,
+adds them to the next call and asks again — so it can follow the change into its callers, types and
+tests. The loop is bounded by `config.json`'s `review` section:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `max_rounds` | `2` | How many times the reviewer may ask for more files. |
+| `max_files` | `10` | Files read across all rounds. |
+| `max_chars_per_file` | `8000` | Per file cap. |
+| `max_total_chars` | `48000` | Cap for everything read. |
+| `max_diff_files` | `20` | Changed files the reviewer sees, independent of `analysis-depth`. |
+| `max_diff_lines` | `40` | Patch lines per file, over the `analysis-depth` limit. |
+| `max_commits` | `30` | Commit messages sent with the diff. |
+| `max_tokens` | `3000` | Output budget, since a report is long prose. |
+
+Only paths that were actually offered in the file list are read, so the reviewer cannot make the
+action fetch anything arbitrary. The stage costs a few extra API reads (the diff again, the commit
+list, the file list, and one request per file it reads) and one model call per round.
+
+It is skipped for drafts, and it needs a `pr-code-access` other than `off`: rather than fetching
+code the repository asked to keep away from the AI, it says so with a warning. A review that fails
+(provider error, unusable answer, content filter) is logged and skipped — unlike the triage checks
+it never closes the pull request and never fails the run. The verdict is printed to the log and
+written to the job summary.
 
 ### History
 

@@ -23,6 +23,7 @@ query($owner: String!, $repo: String!) {
 """
 
 TRUNCATION_SUFFIX = "\n\n...(truncated)"
+REVIEW_EVENT = "COMMENT"
 
 
 def truncate(text, limit):
@@ -281,18 +282,22 @@ class GitHubClient:
             parts.append(f"-label:{quoted}")
         return " ".join(parts)
 
-    def get_pr_file_changes(self, number):
+    def get_pr_file_changes(self, number, max_files=None, max_patch_lines=None):
         access = self._inputs.pr_code_access
         if access == "off":
             log.info(self._config.logging.file_analysis_disabled_info)
             return self._config.logging.file_analysis_disabled
 
         pull = None
-        max_files = self._inputs.max_files_to_analyze
+        limit = self._inputs.max_files_to_analyze if max_files is None else max_files
+        patch_lines = self._inputs.max_patch_lines_per_file
+        diff_lines = self._config.code_access.diff_lines
+        if max_patch_lines is not None:
+            patch_lines = diff_lines = max_patch_lines
         try:
             pull = self._get_pull(number)
             paginated = pull.get_files()
-            shown = list(itertools.islice(paginated, max_files))
+            shown = list(itertools.islice(paginated, limit))
             total = getattr(paginated, "totalCount", None) or len(shown)
         except GithubException as exc:
             log.warning(self._config.log_line("file_changes_error", error=_describe(exc)))
@@ -312,10 +317,10 @@ class GitHubClient:
             for file in shown
         ]
         if access == "full":
-            text = format_file_changes_full(changes, self._config.code_access.diff_lines)
+            text = format_file_changes_full(changes, diff_lines)
             text += self._changed_files_text(pull, [change.filename for change in changes])
         else:
-            text = format_file_changes(changes, self._inputs.max_patch_lines_per_file)
+            text = format_file_changes(changes, patch_lines)
         if total > len(changes):
             text += "\n" + self._config.log_line("file_changes_truncated", total=total, shown=len(changes))
         log.info(self._config.log_line("file_changes_count", count=total))
@@ -326,8 +331,22 @@ class GitHubClient:
         text = self.get_files_text(filenames, ref=ref)
         return f"\n\n---\n\n{text}" if text else ""
 
-    def get_file_tree(self):
-        paths = self._fetch_tree_paths()
+    def get_pr_commits_text(self, number, limit):
+        """The commit list as ``sha first line`` rows, oldest first."""
+        try:
+            commits = list(itertools.islice(self._get_pull(number).get_commits(), limit))
+        except (GithubException, ApiError) as exc:
+            log.warning(self._config.log_line("commits_unavailable", error=_describe(exc)))
+            return ""
+
+        lines = []
+        for commit in commits:
+            message = (commit.commit.message or "").strip().splitlines()
+            lines.append(f"{commit.sha[:12]} {message[0] if message else ''}".strip())
+        return truncate("\n".join(lines), self._config.ai_settings.content_max_chars)
+
+    def get_file_tree(self, ref=None):
+        paths = self._fetch_tree_paths(ref)
         if not paths:
             return ""
 
@@ -344,9 +363,11 @@ class GitHubClient:
         log.info(self._config.log_line("file_tree_found", count=len(selected), total=len(paths)))
         return "\n".join(selected)
 
-    def _fetch_tree_paths(self):
+    def _fetch_tree_paths(self, ref=None):
         try:
-            tree = self.repository.get_git_tree(self.repository.default_branch, recursive=True)
+            tree = self.repository.get_git_tree(
+                ref or self.repository.default_branch, recursive=True
+            )
         except GithubException as exc:
             log.warning(self._config.log_line("file_tree_unavailable", error=_describe(exc)))
             return []
@@ -359,15 +380,34 @@ class GitHubClient:
             if entry.type == "blob" and not _is_noise_path(entry.path)
         ]
 
-    def get_files_text(self, paths, ref=None):
+    def get_files_text(
+        self,
+        paths,
+        ref=None,
+        *,
+        exclude=(),
+        max_files=None,
+        max_chars_per_file=None,
+        max_total_chars=None,
+    ):
         wanted = [
-            path for path in paths if path and not path.startswith("/") and ".." not in path.split("/")
+            path
+            for path in paths
+            if path and path not in exclude and not path.startswith("/") and ".." not in path.split("/")
         ]
         if not wanted:
             return ""
 
-        per_file = self._config.code_access.max_chars_per_file
-        total = self._config.code_access.max_total_chars
+        if max_files is not None:
+            wanted = wanted[:max_files]
+        per_file = (
+            self._config.code_access.max_chars_per_file
+            if max_chars_per_file is None
+            else max_chars_per_file
+        )
+        total = (
+            self._config.code_access.max_total_chars if max_total_chars is None else max_total_chars
+        )
         blocks = []
         used = 0
         for path in wanted:
@@ -416,6 +456,13 @@ class GitHubClient:
 
     def close_pr(self, number):
         self._call(lambda: self._get_pull(number).edit(state="closed"), f"close PR #{number}")
+
+    def create_review(self, number, body):
+        # event="COMMENT" is required: without it GitHub leaves the review in an invisible PENDING state
+        self._call(
+            lambda: self._get_pull(number).create_review(body=body, event=REVIEW_EVENT),
+            f"review of PR #{number}",
+        )
 
     def _get_issue(self, number):
         try:

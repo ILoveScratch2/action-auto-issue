@@ -69,6 +69,16 @@ class IssueActions(_Actions):
 
 
 class PrActions(_Actions):
+    def review(self, number, body, log_key=None):
+        try:
+            self._client.create_review(number, body)
+        except ApiError as exc:
+            log.warning(self._config.log_line("pr_review_failed", number=number, error=exc))
+            return False
+        if log_key:
+            log.info(self._config.log_line(log_key, number=number))
+        return True
+
     def close(self, number, state_reason=None):
         try:
             self._client.close_pr(number)

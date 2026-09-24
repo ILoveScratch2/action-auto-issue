@@ -19,6 +19,8 @@ class PullRequestEvent:
     title: str
     body: str
     author: str
+    head_sha: str = ""
+    draft: bool = False
 
 
 def parse_issue_event(payload):
@@ -30,13 +32,20 @@ def parse_issue_event(payload):
 def parse_pr_event(payload):
     if payload.get("action") != OPENED or not payload.get("pull_request"):
         return None
-    return _from_payload(payload["pull_request"], PullRequestEvent)
+    raw = payload["pull_request"]
+    return _from_payload(
+        raw,
+        PullRequestEvent,
+        head_sha=str((raw.get("head") or {}).get("sha") or ""),
+        draft=bool(raw.get("draft")),
+    )
 
 
-def _from_payload(raw, cls):
+def _from_payload(raw, cls, **fields):
     return cls(
         number=raw.get("number"),
         title=raw.get("title") or "",
         body=raw.get("body") or "",
         author=str((raw.get("user") or {}).get("login") or "").lower(),
+        **fields,
     )

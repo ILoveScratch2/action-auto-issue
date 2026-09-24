@@ -16,6 +16,8 @@ from .results import (
     PrDecision,
     QualityVerdict,
     SpamVerdict,
+    parse_review_report,
+    parse_review_request,
 )
 from .github_client import HistoryResult
 from .template_detector import analyze_issue_quality
@@ -358,6 +360,7 @@ def handle_new_pr(ctx, pr):
             )
             return
 
+        _review_pr(ctx, actions, pr, analyzer)
         _classify_pr(ctx, actions, pr, file_changes)
     except ContentFilterError:
         log.warning(ctx.config.log_line("ai_content_filtered", number=pr.number))
@@ -367,6 +370,120 @@ def handle_new_pr(ctx, pr):
             "pr_content_filtered_log",
             ctx.config.outcomes.pr_content_filtered,
         )
+
+
+def _review_pr(ctx, actions, pr, analyzer):
+    """Reviews the diff, letting the model pull more project files in bounded rounds."""
+    if ctx.inputs.pr_review != "on":
+        return
+    if pr.draft:
+        log.info(ctx.config.log_line("pr_review_skipped_draft", number=pr.number))
+        return
+    if ctx.inputs.pr_code_access == "off":
+        log.warning(ctx.config.log_line("pr_review_skipped_no_diff", number=pr.number))
+        return
+
+    review = ctx.config.review
+    log.info(ctx.config.logging.pr_review_start)
+    ref = pr.head_sha or None
+    material = ""
+    read = []
+    try:
+        diff = ctx.client.get_pr_file_changes(
+            pr.number, max_files=review.max_diff_files, max_patch_lines=review.max_diff_lines
+        )
+        if diff == ctx.config.logging.file_changes_unavailable:
+            log.warning(
+                ctx.config.log_line(
+                    "pr_review_failed", number=pr.number, error="the pull request diff is unavailable"
+                )
+            )
+            return
+        commits = ctx.client.get_pr_commits_text(pr.number, review.max_commits)
+        tree = ctx.client.get_file_tree(ref=ref)
+
+        raw = ""
+        for round_number in range(review.max_rounds + 1):
+            remaining = review.max_files - len(read)
+            raw = analyzer.review_pr(
+                title=pr.title,
+                body=pr.body,
+                diff=diff,
+                commits=commits,
+                file_tree=tree,
+                project_files=material,
+                max_files=remaining,
+            )
+            requested = (
+                parse_review_request(raw, tree.splitlines(), remaining)
+                if round_number < review.max_rounds and tree
+                else None
+            )
+            if not requested:
+                break
+            log.info(
+                ctx.config.log_line(
+                    "pr_review_files_requested",
+                    round=round_number + 1,
+                    count=len(requested),
+                    files=", ".join(requested),
+                )
+            )
+            text, read_now = _read_review_files(ctx, requested, ref, read, review, len(material))
+            if not read_now:
+                break
+            material += text
+            read.extend(read_now)
+    except ContentFilterError:
+        log.warning(ctx.config.log_line("pr_review_skipped_filtered", number=pr.number))
+        return
+    except AutoIssueError as exc:
+        log.error(ctx.config.log_line("pr_review_failed", number=pr.number, error=exc))
+        return
+
+    verdict, report = parse_review_report(raw)
+    if not report or parse_review_request(raw, [], 0) is not None:
+        log.info(ctx.config.log_line("pr_review_no_report", number=pr.number))
+        return
+    if verdict is None:
+        log.info(ctx.config.logging.pr_review_no_verdict)
+    else:
+        log.info(ctx.config.log_line("pr_review_result", result=verdict.value))
+
+    prefix = ctx.config.response("pr_review_prefix", author=pr.author, model=ctx.inputs.model)
+    posted = actions.review(pr.number, prefix + "\n\n" + report, log_key="pr_review_posted_log")
+    if not posted:
+        return
+    log.summary(
+        f"### PR #{pr.number} code review\n\n"
+        f"- Verdict: {verdict.value if verdict else 'unknown'}\n"
+        f"- Project files read: {len(read)}\n"
+    )
+
+
+def _read_review_files(ctx, paths, ref, read, review, used_chars):
+    """Reads the files the reviewer asked for, or returns nothing when the budget is spent."""
+    remaining = review.max_total_chars - used_chars
+    if remaining <= 0:
+        return "", ()
+    text = ctx.client.get_files_text(
+        paths,
+        ref=ref,
+        exclude=set(read),
+        max_files=review.max_files - len(read),
+        max_chars_per_file=review.max_chars_per_file,
+        max_total_chars=remaining,
+    )
+    if not text:
+        return "", ()
+    loaded = tuple(
+        path for path in paths if any(line == f"## {path}" for line in text.splitlines())
+    )
+    # GitHubClient prefixes every block with its path. Keep compatibility with lightweight
+    # clients that return already-formatted material without those headers.
+    if not loaded:
+        loaded = tuple(paths)
+    return text, loaded
 
 
 def _classify_pr(ctx, actions, pr, file_changes):

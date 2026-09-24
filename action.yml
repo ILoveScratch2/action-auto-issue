@@ -56,6 +56,10 @@ inputs:
     description: 'How much of a pull request diff to include: light (3 files/3 lines), normal (5/5) or deep (10/10)'
     required: false
     default: 'normal'
+  pr-review:
+    description: 'Post an AI code review of the pull request diff: off or on. The review may read more project files in bounded rounds and is posted as a review comment, never as an approval'
+    required: false
+    default: 'off'
   blocked-users:
     description: 'Comma separated logins that are closed and locked without any AI analysis'
     required: false
@@ -99,6 +103,7 @@ runs:
         INPUT_ISSUE_CODE_ACCESS: ${{ inputs.issue-code-access }}
         INPUT_PR_CODE_ACCESS: ${{ inputs.pr-code-access }}
         INPUT_ANALYSIS_DEPTH: ${{ inputs.analysis-depth }}
+        INPUT_PR_REVIEW: ${{ inputs.pr-review }}
         INPUT_BLOCKED_USERS: ${{ inputs.blocked-users }}
         INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
         INPUT_CONTENT_MAX_CHARS: ${{ inputs.content-max-chars }}
