@@ -523,7 +523,8 @@ class GitHubClient:
     def _file_text(self, path, ref, *, repo=None):
         target = repo if repo is not None else self.repository
         try:
-            content = target.get_contents(path, ref=ref)
+            # PyGithub 2.x asserts the ref is a str: an unset ref means the default branch
+            content = target.get_contents(path, ref=ref or target.default_branch)
         except GithubException as exc:
             log.warning(self._config.log_line("file_unavailable", path=path, error=_describe(exc)))
             return None
