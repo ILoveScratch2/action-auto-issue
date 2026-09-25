@@ -7,6 +7,7 @@ from . import log
 from .actions import IssueActions, PrActions
 from .analyzer import Analyzer
 from .classifier import Classifier, match_label
+from .config import policy_block
 from .errors import AutoIssueError, ContentFilterError
 from .results import (
     CoverageVerdict,
@@ -104,6 +105,7 @@ def _read_project_files(ctx, analyzer, issue):
 def _triage_issue(ctx, issue):
     actions = IssueActions(ctx.client, ctx.config, ctx.inputs, ctx.failures)
     analyzer = Analyzer(ctx.ai, ctx.config)
+    extra_prompt = policy_block(ctx.config, ctx.inputs)
 
     readme = ctx.client.get_readme()
     pinned = ctx.client.get_pinned_issues_text()
@@ -136,6 +138,7 @@ def _triage_issue(ctx, issue):
         history=history.text,
         project_files=project_files,
         reference_files=reference_files,
+        extra_prompt=extra_prompt,
     )
     log.info(ctx.config.log_line("readme_check_result", result=coverage.value))
     if coverage is CoverageVerdict.COVERED:
@@ -154,7 +157,16 @@ def _triage_issue(ctx, issue):
         return IssueResult(IssueStatus.CLOSED)
 
     return _classify_issue(
-        ctx, actions, analyzer, issue, quality, readme, history.text, project_files, reference_files
+        ctx,
+        actions,
+        analyzer,
+        issue,
+        quality,
+        readme,
+        history.text,
+        project_files,
+        reference_files,
+        extra_prompt,
     )
 
 
@@ -195,7 +207,16 @@ def _answer_from_docs(
 
 
 def _classify_issue(
-    ctx, actions, analyzer, issue, quality, readme, history="", project_files="", reference_files=""
+    ctx,
+    actions,
+    analyzer,
+    issue,
+    quality,
+    readme,
+    history="",
+    project_files="",
+    reference_files="",
+    extra_prompt="",
 ):
     log.info(ctx.config.log_line("classification_start", number=issue.number))
     log.info(ctx.config.log_line("available_labels", labels=", ".join(ctx.inputs.labels)))
@@ -203,9 +224,24 @@ def _classify_issue(
     content = quality.content.user_content if quality.template.has_template else (issue.body or "")
     try:
         classification = Classifier(ctx.ai, ctx.config).classify_issue(
-            title=issue.title, content=content, labels=ctx.inputs.labels, project_files=project_files
+            title=issue.title,
+            content=content,
+            labels=ctx.inputs.labels,
+            project_files=project_files,
+            extra_prompt=extra_prompt,
         )
         label = _apply_label(ctx, actions, issue.number, classification)
+
+        outcome = ctx.inputs.label_outcomes.get(label) if label else None
+        prefix = ctx.inputs.title_prefixes.get(label, "")
+        if outcome is not None:
+            if not outcome.close:
+                actions.prefix_title(issue.number, issue.title, prefix)
+            actions.apply_outcome(issue.number, outcome.comment, "label_outcome_log", outcome.policy())
+            return IssueResult(
+                IssueStatus.CLOSED if outcome.close else IssueStatus.KEPT, classification, label
+            )
+        actions.prefix_title(issue.number, issue.title, prefix)
 
         if not _needs_details(classification, ctx.inputs.labels):
             log.info(ctx.config.log_line("issue_passed_log", number=issue.number))
@@ -218,6 +254,7 @@ def _classify_issue(
             body=issue.body,
             template_report=quality.report(),
             project_files=project_files,
+            extra_prompt=extra_prompt,
         )
     except ContentFilterError:
         raise

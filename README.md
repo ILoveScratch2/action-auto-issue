@@ -75,6 +75,9 @@ You can set `ai-api-type: responses` to use the responses API.
 | `pr-review` | `off` | `on` posts an AI code review of the diff as a review comment. Never an approval, and drafts are skipped. |
 | `blocked-users` | — | Logins closed and locked without any AI call. |
 | `reference-repos` | — | Up to 3 `owner/repo` names of other repositories used as reference material, comma separated. |
+| `extra-prompt` | — | Extra maintainer instructions for the issue checks, added to the classification, coverage and quality prompts. |
+| `label-outcomes` | — | JSON object mapping a configured label to its own policy: `{"label": {"comment": "text", "close": true, "lock": true, "labels": ["extra"]}}`. |
+| `title-prefixes` | — | Comma separated `label=prefix` pairs, for example `bug=[Bug],enhancement=[Feature]`. |
 | `max-tokens` | `30000` | Upper bound per model response. |
 | `content-max-chars` | `20000` | Truncation limit |
 :
@@ -213,6 +216,50 @@ results, which is the way to keep a discussion out of the answering material. Th
 from the title's terms, so a title of one or two letter words finds nothing. The search endpoint has
 its own rate limit (30 requests per minute for an authenticated token) and its index lags behind by
 a few seconds, so an item opened moments ago will not show up.
+
+### Issue policy
+
+Three inputs let the workflow add its own policy to the issue path, so rules that are specific to a
+repository do not have to be baked into the action:
+
+```yaml
+        with:
+          extra-prompt: |
+            所有提到新 Driver 支持的都按 needs-transfer: doc 分类。
+          label-outcomes: |
+            {"needs-transfer: doc": {"comment": "请到 OpenList/OpenList-Docs 提交这个请求。", "close": true, "lock": true}}
+          title-prefixes: bug=[Bug],enhancement=[Feature]
+```
+
+`extra-prompt` is inserted into the instructions of the issue classification, the README coverage
+check and the content quality check, wrapped as maintainer policy. It is trusted text from the
+workflow file, so it sits with the instructions and never inside the payload that carries the issue
+itself; it cannot change the response format those calls expect. It reaches no other call: the
+answers, the smart answer, the fix suggestion, the PR checks and the code review are unaffected.
+
+`label-outcomes` gives a label its own handling. When the classification matches that label, the
+policy replaces the rest of the flow: the comment is posted, the issue is closed (`not_planned`) and
+locked, the extra labels are added, and neither the quality check nor the fix suggestion runs. A
+policy without `close` keeps the issue open and lets the flow continue. Every label named here, and
+every label in a policy's own `labels` list, must be one of the `labels` input entries.
+
+`title-prefixes` renames the issue once the classification matches: `bug=[Bug]` turns
+`Crash on startup` into `[Bug] Crash on startup`. A title that already carries the prefix is left
+alone, and a label whose policy closes the issue is skipped, so a closed issue does not get renamed.
+
+Five details worth knowing:
+
+- The policy texts are posted verbatim: no locale, no `{placeholders}`, no translation. Write them in
+  the language the repository speaks.
+- Everything is issue-only. Pull requests keep their own flow (`pr-code-access`, `pr-review`).
+- A matching label short-circuits the normal tail of the issue flow, so an issue that would have been
+  asked for more details is handled by the policy instead.
+- `apply-labels: false` also suppresses the policy's own labels, but the comment, the close and the
+  lock still happen.
+- Malformed input stops the run with a configuration error instead of silently ignoring the policy.
+  The sizes are capped by `config.json`'s `policy` section (`extra_prompt_max_chars` 4000,
+  `label_comment_max_chars` 2000, `title_prefix_max_chars` 100); an over-long `extra-prompt` is
+  truncated with a warning, the other two are rejected.
 
 ### Outcome behaviour
 

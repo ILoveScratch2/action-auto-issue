@@ -29,12 +29,16 @@ class Classifier:
         self._ai = ai
         self._config = config
 
-    def classify_issue(self, *, title, content, labels, project_files=""):
+    def classify_issue(self, *, title, content, labels, project_files="", extra_prompt=""):
         payload = {"title": title, "content": content}
         if project_files:
             payload["projectFiles"] = project_files
         return self._ai.complete(
-            instructions=self._config.prompt("issue_classification", labels_options=self._label_options(labels)),
+            instructions=self._config.prompt(
+                "issue_classification",
+                labels_options=self._label_options(labels),
+                extra_prompt=extra_prompt,
+            ),
             payload=payload,
             purpose="Issue classification",
         )

@@ -68,6 +68,18 @@ inputs:
     description: 'Comma separated owner/repo names of up to 3 other repositories used as reference material (for example a standalone documentation repository). The token needs contents:read on them; unreadable repositories are skipped with a warning.'
     required: false
     default: ''
+  extra-prompt:
+    description: 'Extra instructions for the issue checks, written by the repository maintainers. They are added to the classification, README coverage and content quality prompts; they cannot change the answer format.'
+    required: false
+    default: ''
+  label-outcomes:
+    description: 'JSON object mapping one of the labels input to a policy: {"label": {"comment": "text", "close": true, "lock": true, "labels": ["extra"]}}. A matching classification is handled by that policy instead of the normal flow. The comment is posted verbatim (no locale, no placeholders).'
+    required: false
+    default: ''
+  title-prefixes:
+    description: 'Comma separated label=prefix pairs, for example bug=[Bug],enhancement=[Feature]. A matching classification prefixes the issue title once; a label whose policy closes the issue is left alone.'
+    required: false
+    default: ''
   max-tokens:
     description: 'Maximum tokens per model response'
     required: false
@@ -112,6 +124,9 @@ runs:
         INPUT_PR_REVIEW: ${{ inputs.pr-review }}
         INPUT_BLOCKED_USERS: ${{ inputs.blocked-users }}
         INPUT_REFERENCE_REPOS: ${{ inputs.reference-repos }}
+        INPUT_EXTRA_PROMPT: ${{ inputs.extra-prompt }}
+        INPUT_LABEL_OUTCOMES: ${{ inputs.label-outcomes }}
+        INPUT_TITLE_PREFIXES: ${{ inputs.title-prefixes }}
         INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
         INPUT_CONTENT_MAX_CHARS: ${{ inputs.content-max-chars }}
       run: python -m auto_issue

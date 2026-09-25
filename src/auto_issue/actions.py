@@ -67,6 +67,17 @@ class IssueActions(_Actions):
             return False
         return True
 
+    def prefix_title(self, number, title, prefix):
+        if not prefix or title.startswith(prefix):
+            return False
+        try:
+            self._client.edit_issue_title(number, f"{prefix} {title}")
+        except ApiError as exc:
+            log.warning(self._config.log_line("title_prefix_failed", number=number, error=exc))
+            return False
+        log.info(self._config.log_line("title_prefixed", number=number, prefix=prefix))
+        return True
+
 
 class PrActions(_Actions):
     def review(self, number, body, log_key=None):

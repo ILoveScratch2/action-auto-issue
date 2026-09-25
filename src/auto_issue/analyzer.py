@@ -83,7 +83,16 @@ class Analyzer:
         return parse_file_selection(raw, file_tree.splitlines(), max_files)
 
     def check_readme_coverage(
-        self, *, title, body, readme, pinned, history="", project_files="", reference_files=""
+        self,
+        *,
+        title,
+        body,
+        readme,
+        pinned,
+        history="",
+        project_files="",
+        reference_files="",
+        extra_prompt="",
     ):
         if not readme and not pinned and not history and not reference_files:
             return CoverageVerdict.NOT_COVERED
@@ -94,7 +103,7 @@ class Analyzer:
             **_context(history, project_files, reference_files),
         }
         return self._verdict(
-            instructions=self._config.prompts.readme_coverage_check,
+            instructions=self._config.prompt("readme_coverage_check", extra_prompt=extra_prompt),
             payload=payload,
             purpose="README coverage check",
             enum_cls=CoverageVerdict,
@@ -110,9 +119,11 @@ class Analyzer:
         )
         return parse_duplicate(raw, candidates)
 
-    def check_content_quality(self, *, title, body, template_report, project_files=""):
+    def check_content_quality(
+        self, *, title, body, template_report, project_files="", extra_prompt=""
+    ):
         return self._verdict(
-            instructions=self._config.prompts.content_quality_check,
+            instructions=self._config.prompt("content_quality_check", extra_prompt=extra_prompt),
             payload={
                 "title": title,
                 "body": body,

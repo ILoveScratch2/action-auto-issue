@@ -548,6 +548,9 @@ class GitHubClient:
             f"close issue #{number}",
         )
 
+    def edit_issue_title(self, number, title):
+        self._call(lambda: self._get_issue(number).edit(title=title), f"title of #{number}")
+
     def lock_issue(self, number):
         self._call(lambda: self._get_issue(number).lock(self._inputs.lock_reason), f"lock #{number}")
 
