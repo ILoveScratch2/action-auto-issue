@@ -20,6 +20,7 @@ from .results import (
     parse_review_request,
 )
 from .github_client import HistoryResult
+from .references import read_reference_material
 from .template_detector import analyze_issue_quality
 
 if TYPE_CHECKING:
@@ -124,6 +125,7 @@ def _triage_issue(ctx, issue):
     # search history
     history = _search_history(ctx, issue.title, issue.number)
     project_files = _read_project_files(ctx, analyzer, issue)
+    reference_files = read_reference_material(ctx, analyzer, title=issue.title, body=issue.body)
 
     log.info(ctx.config.logging.readme_check_start)
     coverage = analyzer.check_readme_coverage(
@@ -133,11 +135,12 @@ def _triage_issue(ctx, issue):
         pinned=pinned,
         history=history.text,
         project_files=project_files,
+        reference_files=reference_files,
     )
     log.info(ctx.config.log_line("readme_check_result", result=coverage.value))
     if coverage is CoverageVerdict.COVERED:
         return _answer_from_docs(
-            ctx, actions, analyzer, issue, readme, pinned, history.text, project_files
+            ctx, actions, analyzer, issue, readme, pinned, history.text, project_files, reference_files
         )
 
     duplicate = _duplicate_of(ctx, analyzer, issue, history)
@@ -151,11 +154,13 @@ def _triage_issue(ctx, issue):
         return IssueResult(IssueStatus.CLOSED)
 
     return _classify_issue(
-        ctx, actions, analyzer, issue, quality, readme, history.text, project_files
+        ctx, actions, analyzer, issue, quality, readme, history.text, project_files, reference_files
     )
 
 
-def _answer_from_docs(ctx, actions, analyzer, issue, readme, pinned, history="", project_files=""):
+def _answer_from_docs(
+    ctx, actions, analyzer, issue, readme, pinned, history="", project_files="", reference_files=""
+):
     try:
         answer = analyzer.generate_readme_answer(
             title=issue.title,
@@ -164,6 +169,7 @@ def _answer_from_docs(ctx, actions, analyzer, issue, readme, pinned, history="",
             pinned=pinned,
             history=history,
             project_files=project_files,
+            reference_files=reference_files,
         )
     except ContentFilterError:
         raise
@@ -188,7 +194,9 @@ def _answer_from_docs(ctx, actions, analyzer, issue, readme, pinned, history="",
     return IssueResult(IssueStatus.CLOSED)
 
 
-def _classify_issue(ctx, actions, analyzer, issue, quality, readme, history="", project_files=""):
+def _classify_issue(
+    ctx, actions, analyzer, issue, quality, readme, history="", project_files="", reference_files=""
+):
     log.info(ctx.config.log_line("classification_start", number=issue.number))
     log.info(ctx.config.log_line("available_labels", labels=", ".join(ctx.inputs.labels)))
 
@@ -229,7 +237,7 @@ def _classify_issue(ctx, actions, analyzer, issue, quality, readme, history="", 
         return IssueResult(IssueStatus.CLOSED, classification, label)
 
     if verdict is QualityVerdict.UNCLEAR:
-        _handle_unclear(ctx, actions, analyzer, issue, readme, history, project_files)
+        _handle_unclear(ctx, actions, analyzer, issue, readme, history, project_files, reference_files)
         return IssueResult(IssueStatus.NEEDS_INFO, classification, label)
 
     log.info(ctx.config.log_line("issue_passed_log", number=issue.number))
@@ -267,9 +275,11 @@ def _apply_label(ctx, actions, number, classification):
     return label
 
 
-def _handle_unclear(ctx, actions, analyzer, issue, readme, history="", project_files=""):
+def _handle_unclear(
+    ctx, actions, analyzer, issue, readme, history="", project_files="", reference_files=""
+):
     policy = ctx.config.outcomes.issue_unclear
-    if policy["comment"] and (readme or history or project_files):
+    if policy["comment"] and (readme or history or project_files or reference_files):
         try:
             answer = analyzer.generate_smart_answer(
                 title=issue.title,
@@ -277,6 +287,7 @@ def _handle_unclear(ctx, actions, analyzer, issue, readme, history="", project_f
                 readme=readme,
                 history=history,
                 project_files=project_files,
+                reference_files=reference_files,
             )
         except ContentFilterError:
             raise
@@ -401,6 +412,7 @@ def _review_pr(ctx, actions, pr, analyzer):
             return
         commits = ctx.client.get_pr_commits_text(pr.number, review.max_commits)
         tree = ctx.client.get_file_tree(ref=ref)
+        reference_files = read_reference_material(ctx, analyzer, title=pr.title, body=pr.body)
 
         raw = ""
         for round_number in range(review.max_rounds + 1):
@@ -412,6 +424,7 @@ def _review_pr(ctx, actions, pr, analyzer):
                 commits=commits,
                 file_tree=tree,
                 project_files=material,
+                reference_files=reference_files,
                 max_files=remaining,
             )
             requested = (

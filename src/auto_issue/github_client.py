@@ -167,6 +167,7 @@ class GitHubClient:
         self._inputs = inputs
         self._repository_name = repository
         self._repo = None
+        self._repos = {}
 
     @property
     def repository_name(self):
@@ -350,26 +351,71 @@ class GitHubClient:
         if not paths:
             return ""
 
-        max_files = self._config.code_access.max_tree_files
-        max_chars = self._config.code_access.max_tree_chars
+        selected = self._cap_tree_text(
+            paths, self._config.code_access.max_tree_files, self._config.code_access.max_tree_chars
+        )
+        if len(selected) < len(paths):
+            log.info(self._config.log_line("file_tree_capped", count=len(selected), total=len(paths)))
+        log.info(self._config.log_line("file_tree_found", count=len(selected), total=len(paths)))
+        return "\n".join(selected)
+
+    def get_reference_tree(self, name, *, max_files=None, max_chars=None):
+        """The file list of a reference repository, or "" when it cannot be read."""
+        repo = self._repo_for(name)
+        if repo is None:
+            return ""
+        paths = self._fetch_tree_paths(repo=repo, label=name)
+        if not paths:
+            return ""
+
+        selected = self._cap_tree_text(
+            paths,
+            self._config.references.max_tree_files if max_files is None else max_files,
+            self._config.references.max_tree_chars if max_chars is None else max_chars,
+        )
+        log.info(
+            self._config.log_line(
+                "reference_tree_found", repo=name, count=len(selected), total=len(paths)
+            )
+        )
+        return "\n".join(selected)
+
+    def _cap_tree_text(self, paths, max_files, max_chars):
         selected = []
         used = 0
         for path in paths:
             if len(selected) >= max_files or used + len(path) + 1 > max_chars:
-                log.info(self._config.log_line("file_tree_capped", count=len(selected), total=len(paths)))
                 break
             selected.append(path)
             used += len(path) + 1
-        log.info(self._config.log_line("file_tree_found", count=len(selected), total=len(paths)))
-        return "\n".join(selected)
+        return selected
 
-    def _fetch_tree_paths(self, ref=None):
+    def _repo_for(self, name):
+        if name == self._repository_name.lower():
+            return self.repository
+        if name not in self._repos:
+            try:
+                self._repos[name] = self._gh.get_repo(name)
+            except GithubException as exc:
+                log.warning(
+                    self._config.log_line("reference_unavailable", repo=name, error=_describe(exc))
+                )
+                self._repos[name] = None
+        return self._repos[name]
+
+    def _fetch_tree_paths(self, ref=None, *, repo=None, label=None):
+        target = repo if repo is not None else self.repository
         try:
-            tree = self.repository.get_git_tree(
-                ref or self.repository.default_branch, recursive=True
-            )
+            tree = target.get_git_tree(ref or target.default_branch, recursive=True)
         except GithubException as exc:
-            log.warning(self._config.log_line("file_tree_unavailable", error=_describe(exc)))
+            if label is None:
+                log.warning(self._config.log_line("file_tree_unavailable", error=_describe(exc)))
+            else:
+                log.warning(
+                    self._config.log_line(
+                        "reference_tree_unavailable", repo=label, error=_describe(exc)
+                    )
+                )
             return []
 
         if getattr(tree, "truncated", False):
@@ -389,6 +435,53 @@ class GitHubClient:
         max_files=None,
         max_chars_per_file=None,
         max_total_chars=None,
+    ):
+        return self._files_text(
+            self.repository,
+            paths,
+            ref=ref,
+            exclude=exclude,
+            max_files=max_files,
+            max_chars_per_file=max_chars_per_file,
+            max_total_chars=max_total_chars,
+        )
+
+    def get_reference_files_text(
+        self, name, paths, *, max_files=None, max_chars_per_file=None, max_total_chars=None
+    ):
+        """Reads the chosen files of a reference repository, or "" when none is readable."""
+        repo = self._repo_for(name)
+        if repo is None:
+            return ""
+        return self._files_text(
+            repo,
+            paths,
+            ref=None,
+            max_files=max_files,
+            max_chars_per_file=(
+                self._config.references.max_chars_per_file
+                if max_chars_per_file is None
+                else max_chars_per_file
+            ),
+            max_total_chars=(
+                self._config.references.max_total_chars
+                if max_total_chars is None
+                else max_total_chars
+            ),
+            label=name,
+        )
+
+    def _files_text(
+        self,
+        repo,
+        paths,
+        *,
+        ref,
+        exclude=(),
+        max_files=None,
+        max_chars_per_file=None,
+        max_total_chars=None,
+        label=None,
     ):
         wanted = [
             path
@@ -414,10 +507,12 @@ class GitHubClient:
             if used >= total:
                 log.info(self._config.log_line("file_material_truncated", limit=total))
                 break
-            content = self._file_text(path, ref)
+            content = self._file_text(path, ref, repo=repo)
             if content is None:
                 continue
-            block = f"## {path}\n\n{truncate(content, per_file)}"
+            # the repository name keeps reference paths attributable across repositories
+            heading = f"## {label}:{path}" if label else f"## {path}"
+            block = f"{heading}\n\n{truncate(content, per_file)}"
             blocks.append(block)
             used += len(block)
         if not blocks:
@@ -425,9 +520,10 @@ class GitHubClient:
         log.info(self._config.log_line("files_read", count=len(blocks)))
         return truncate("\n\n---\n\n".join(blocks), total)
 
-    def _file_text(self, path, ref):
+    def _file_text(self, path, ref, *, repo=None):
+        target = repo if repo is not None else self.repository
         try:
-            content = self.repository.get_contents(path, ref=ref)
+            content = target.get_contents(path, ref=ref)
         except GithubException as exc:
             log.warning(self._config.log_line("file_unavailable", path=path, error=_describe(exc)))
             return None

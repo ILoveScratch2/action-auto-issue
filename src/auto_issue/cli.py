@@ -121,6 +121,11 @@ def _log_context(ctx):
     log.info(ctx.config.log_line("analysis_depth_info", access=ctx.inputs.pr_code_access))
     log.info(
         ctx.config.log_line(
+            "reference_repos_info", repos=", ".join(ctx.inputs.reference_repos) or "(none)"
+        )
+    )
+    log.info(
+        ctx.config.log_line(
             "analysis_depth_details",
             depth=ctx.inputs.analysis_depth,
             files=ctx.inputs.max_files_to_analyze,

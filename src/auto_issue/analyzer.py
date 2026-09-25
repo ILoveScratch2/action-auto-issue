@@ -19,13 +19,15 @@ NEED_MORE_INFO = "NEED_MORE_INFO"
 MIN_ANSWER_LENGTH = 10
 
 
-def _context(history="", project_files=""):
+def _context(history="", project_files="", reference_files=""):
     """optional context"""
     material = {}
     if history:
         material["history"] = history
     if project_files:
         material["projectFiles"] = project_files
+    if reference_files:
+        material["referenceFiles"] = reference_files
     return material
 
 
@@ -67,14 +69,29 @@ class Analyzer:
         text = raw.strip()
         return None if text.upper().startswith("NO_SUGGESTION") else text
 
-    def check_readme_coverage(self, *, title, body, readme, pinned, history="", project_files=""):
-        if not readme and not pinned and not history:
+    def select_reference_files(self, *, repo, title, body, file_tree, max_files):
+        raw = self._ai.complete(
+            instructions=self._config.prompt("select_reference_files", max_files=max_files),
+            payload={
+                "repository": repo,
+                "issue": {"title": title, "body": body},
+                "fileList": file_tree,
+            },
+            purpose="Reference file selection",
+            verdict=False,
+        )
+        return parse_file_selection(raw, file_tree.splitlines(), max_files)
+
+    def check_readme_coverage(
+        self, *, title, body, readme, pinned, history="", project_files="", reference_files=""
+    ):
+        if not readme and not pinned and not history and not reference_files:
             return CoverageVerdict.NOT_COVERED
         payload = {
             "readme": readme or "",
             "pinnedIssues": pinned or "",
             "issue": {"title": title, "body": body},
-            **_context(history, project_files),
+            **_context(history, project_files, reference_files),
         }
         return self._verdict(
             instructions=self._config.prompts.readme_coverage_check,
@@ -134,12 +151,14 @@ class Analyzer:
             fallback=PrQualityVerdict.VALID,
         )
 
-    def generate_readme_answer(self, *, title, body, readme, pinned, history="", project_files=""):
+    def generate_readme_answer(
+        self, *, title, body, readme, pinned, history="", project_files="", reference_files=""
+    ):
         payload = {
             "readme": readme or "",
             "pinnedIssues": pinned or "",
             "issue": {"title": title, "body": body},
-            **_context(history, project_files),
+            **_context(history, project_files, reference_files),
         }
         return self._ai.complete(
             instructions=self._config.prompt(
@@ -152,7 +171,9 @@ class Analyzer:
             verdict=False,
         )
 
-    def generate_smart_answer(self, *, title, body, readme, history="", project_files=""):
+    def generate_smart_answer(
+        self, *, title, body, readme, history="", project_files="", reference_files=""
+    ):
         raw = self._ai.complete(
             instructions=self._config.prompt(
                 "unclear_issue_smart_answer",
@@ -162,7 +183,7 @@ class Analyzer:
             payload={
                 "readme": readme,
                 "issue": {"title": title, "body": body},
-                **_context(history, project_files),
+                **_context(history, project_files, reference_files),
             },
             purpose="Unclear issue answer",
             verdict=False,
@@ -175,7 +196,18 @@ class Analyzer:
             return None
         return text if len(text) > MIN_ANSWER_LENGTH else None
 
-    def review_pr(self, *, title, body, diff, commits, file_tree="", project_files="", max_files):
+    def review_pr(
+        self,
+        *,
+        title,
+        body,
+        diff,
+        commits,
+        file_tree="",
+        project_files="",
+        reference_files="",
+        max_files,
+    ):
         return self._ai.complete(
             instructions=self._config.prompt(
                 "pr_review", max_files=max_files, answer_language=self._config.answer_language
@@ -185,7 +217,7 @@ class Analyzer:
                 "fileChanges": diff,
                 "commits": commits,
                 "fileList": file_tree,
-                **_context(project_files=project_files),
+                **_context(project_files=project_files, reference_files=reference_files),
             },
             purpose="PR code review",
             verdict=False,

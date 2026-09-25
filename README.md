@@ -70,7 +70,8 @@ You can set `ai-api-type: responses` to use the responses API.
 | `analysis-depth` | `normal` | `light` / `normal` / `deep` |
 | `pr-review` | `off` | `on` posts an AI code review of the diff as a review comment. Never an approval, and drafts are skipped. |
 | `blocked-users` | — | Logins closed and locked without any AI call. |
-| `max-tokens` | `256` | Upper bound per model response. |
+| `reference-repos` | — | Up to 3 `owner/repo` names of other repositories used as reference material, comma separated. |
+| `max-tokens` | `30000` | Upper bound per model response. |
 | `content-max-chars` | `20000` | Truncation limit |
 :
 
@@ -150,6 +151,45 @@ code the repository asked to keep away from the AI, it says so with a warning. A
 (provider error, unusable answer, content filter) is logged and skipped — unlike the triage checks
 it never closes the pull request and never fails the run. The verdict is printed to the log and
 written to the job summary.
+
+### Reference repositories
+
+`reference-repos: owner/docs,owner/examples` adds up to three other repositories to the material the
+issue checks and the code review read — a standalone documentation repository being the usual case.
+Per repository the model is shown that repository's file list (its default branch), names the files
+worth reading, and those files join the prompt as `referenceFiles` under `owner/repo:path` headings.
+
+The material only reaches the paths that speak to the author, never the ones that judge the content:
+
+- the README coverage check and the answers written from it, so a question the separate
+  documentation repository already answers is answered and closed like a README-covered one;
+- the smart answer for an unclear issue;
+- the pull request code review, in every round.
+
+It never reaches the spam, quality, commit or classification checks, and a repository that cannot be
+read only warns and is skipped — a broken reference can never change an outcome. The feature is
+independent of `issue-code-access` and `pr-code-access`, which govern *this* repository's files.
+
+Reading is bounded by `config.json`'s `references` section, shared across the configured
+repositories:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `max_repos` | `3` | Repositories used; a longer `reference-repos` list is truncated with a warning. |
+| `max_files_per_repo` | `2` | Files read from one repository. |
+| `max_files` | `5` | Files read across all of them. |
+| `max_chars_per_file` | `8000` | Per file cap. |
+| `max_total_chars` | `20000` | Cap for everything read. |
+| `max_tree_files` | `300` | Paths of one repository offered to the model. |
+| `max_tree_chars` | `8000` | Characters of that file list. |
+
+Only paths that were actually offered are read, so the model cannot make the action fetch anything
+arbitrary, and the cost is one file-list read, one model call and the file reads per repository.
+
+The default `GITHUB_TOKEN` only covers the repository the workflow runs in, so reading a reference
+repository needs a token that can see it: pass a PAT (or a GitHub App token) with `contents: read` on
+those repositories through the `token` input. `owner/repo` entries that are malformed or point at the
+target repository itself are ignored with a warning.
 
 ### History
 

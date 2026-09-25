@@ -20,6 +20,7 @@ REQUIRED_SECTIONS = (
     "outcomes",
     "code_access",
     "review",
+    "references",
     "history",
     "answer_languages",
     "logging",
@@ -67,6 +68,16 @@ REVIEW_NUMBERS = (
     "max_commits",
     "max_tokens",
 )
+REFERENCE_NUMBERS = (
+    "max_repos",
+    "max_files_per_repo",
+    "max_files",
+    "max_chars_per_file",
+    "max_total_chars",
+    "max_tree_files",
+    "max_tree_chars",
+)
+REFERENCE_REPO_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 REQUIRED_PROMPTS = ("spam_detection", "readme_coverage_check", "content_quality_check", "pr_spam_detection")
 TRUE_VALUES = ("true", "1", "yes")
 FALSE_VALUES = ("false", "0", "no")
@@ -100,6 +111,7 @@ class Config:
     outcomes: Section
     code_access: Section
     review: Section
+    references: Section
     history: Section
     answer_languages: Section
     logging: Section
@@ -136,6 +148,7 @@ class Inputs:
     pr_review: str
     analysis_depth: str
     blocked_users: tuple
+    reference_repos: tuple
     max_tokens: int
     content_max_chars: int
     max_files_to_analyze: int
@@ -159,6 +172,7 @@ def load_config(root=ACTION_ROOT):
         outcomes=Section(raw["outcomes"]),
         code_access=Section(raw["code_access"]),
         review=Section(raw["review"]),
+        references=Section(raw["references"]),
         history=Section(raw["history"]),
         answer_languages=Section(raw["answer_languages"]),
         logging=Section(raw["logging"]),
@@ -211,6 +225,9 @@ def validate_config(raw):
     for name in REVIEW_NUMBERS:
         if not isinstance(raw["review"].get(name), int) or raw["review"][name] <= 0:
             raise ConfigurationError(f"config.json review.{name} must be a positive integer")
+    for name in REFERENCE_NUMBERS:
+        if not isinstance(raw["references"].get(name), int) or raw["references"][name] <= 0:
+            raise ConfigurationError(f"config.json references.{name} must be a positive integer")
     analysis_depths = raw["analysis_depths"]
     if not isinstance(analysis_depths, dict) or not analysis_depths:
         raise ConfigurationError("config.json analysis_depths must be a non-empty object")
@@ -380,6 +397,7 @@ def parse_inputs(environ, config):
         pr_review=pr_review,
         analysis_depth=depth,
         blocked_users=tuple(user.lower() for user in _split_list(_text(environ, "blocked-users"))),
+        reference_repos=_reference_repos(_text(environ, "reference-repos"), config),
         max_tokens=_positive_int(environ, "max-tokens", config.ai_settings.max_tokens),
         content_max_chars=_positive_int(environ, "content-max-chars", config.ai_settings.content_max_chars),
         max_files_to_analyze=depth_settings["max_files"],
@@ -405,6 +423,25 @@ def _required(environ, name, config):
 
 def _split_list(value):
     return tuple(part.strip() for part in str(value or "").split(",") if part.strip())
+
+
+def _reference_repos(value, config):
+    limit = config.references.max_repos
+    accepted = []
+    for entry in _split_list(value):
+        name = entry.lower()
+        if not REFERENCE_REPO_PATTERN.fullmatch(name):
+            log.warning(config.log_line("unknown_reference_repo", value=entry))
+            continue
+        if name not in accepted:
+            accepted.append(name)
+    if len(accepted) > limit:
+        log.warning(
+            config.log_line(
+                "too_many_reference_repos", limit=limit, repos=", ".join(accepted[limit:])
+            )
+        )
+    return tuple(accepted[:limit])
 
 
 def _positive_int(environ, name, default):

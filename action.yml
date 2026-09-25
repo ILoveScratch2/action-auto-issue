@@ -64,10 +64,14 @@ inputs:
     description: 'Comma separated logins that are closed and locked without any AI analysis'
     required: false
     default: ''
+  reference-repos:
+    description: 'Comma separated owner/repo names of up to 3 other repositories used as reference material (for example a standalone documentation repository). The token needs contents:read on them; unreadable repositories are skipped with a warning.'
+    required: false
+    default: ''
   max-tokens:
     description: 'Maximum tokens per model response'
     required: false
-    default: '256'
+    default: '30000'
   content-max-chars:
     description: 'Maximum characters of README and pinned issue content sent to the model'
     required: false
@@ -105,6 +109,7 @@ runs:
         INPUT_ANALYSIS_DEPTH: ${{ inputs.analysis-depth }}
         INPUT_PR_REVIEW: ${{ inputs.pr-review }}
         INPUT_BLOCKED_USERS: ${{ inputs.blocked-users }}
+        INPUT_REFERENCE_REPOS: ${{ inputs.reference-repos }}
         INPUT_MAX_TOKENS: ${{ inputs.max-tokens }}
         INPUT_CONTENT_MAX_CHARS: ${{ inputs.content-max-chars }}
       run: python -m auto_issue
