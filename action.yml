@@ -91,6 +91,8 @@ runs:
 
     - name: Run the checks
       shell: bash
+      # the caller's workspace must not shadow the installed package through `-m`
+      working-directory: ${{ github.action_path }}
       env:
         PYTHONUNBUFFERED: '1'
         AUTO_ISSUE_ROOT: ${{ github.action_path }}
