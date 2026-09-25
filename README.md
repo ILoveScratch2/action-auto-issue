@@ -35,6 +35,10 @@ jobs:
 ```
 
 
+A workflow that keeps an existing form compliance script and adds this action as a second job, with
+bilingual answers, reference repositories and a larger reading budget, is in
+`examples/openlist-issue-auto-reply.yml`.
+
 ## Requirements
 
 - `contents: read` to read the README, `issues: write` and `pull-requests: write` to comment,
@@ -106,8 +110,9 @@ requests are summarised by the changed lines of their patch. Both can be widened
 | `full` | The whole patch (hunk headers and context lines included) plus the full content of the changed files at the head commit. |
 
 Reading files costs API requests and prompt tokens, so every knob has a budget: `config.json`'s
-`code_access` section holds the caps (`max_files_to_read`, `max_tree_files`, `max_chars_per_file`,
-`max_total_chars`, `diff_lines`). The file list skips vendored, generated and binary paths, and the
+`code_access` section holds the caps (`max_files_to_read` 40, `max_chars_per_file` 2000,
+`max_total_chars` 80000, `max_tree_files`, `diff_lines` — the two character caps are what keep a
+40 file read inside the total). The file list skips vendored, generated and binary paths, and the
 model may only pick paths that were actually offered, so it cannot make the action fetch anything
 arbitrary.
 
@@ -176,10 +181,10 @@ repositories:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `max_repos` | `3` | Repositories used; a longer `reference-repos` list is truncated with a warning. |
-| `max_files_per_repo` | `2` | Files read from one repository. |
-| `max_files` | `5` | Files read across all of them. |
-| `max_chars_per_file` | `8000` | Per file cap. |
-| `max_total_chars` | `20000` | Cap for everything read. |
+| `max_files_per_repo` | `20` | Files read from one repository. |
+| `max_files` | `40` | Files read across all of them. |
+| `max_chars_per_file` | `2000` | Per file cap, sized so the file budget is what limits a read. |
+| `max_total_chars` | `80000` | Cap for everything read. |
 | `max_tree_files` | `300` | Paths of one repository offered to the model. |
 | `max_tree_chars` | `8000` | Characters of that file list. |
 

@@ -73,9 +73,9 @@
   "code_access": {
     "issue": "off",
     "pr": "patch",
-    "max_files_to_read": 5,
-    "max_chars_per_file": 8000,
-    "max_total_chars": 30000,
+    "max_files_to_read": 40,
+    "max_chars_per_file": 2000,
+    "max_total_chars": 80000,
     "max_tree_files": 500,
     "max_tree_chars": 12000,
     "diff_lines": 40,
@@ -95,10 +95,10 @@
 
   "references": {
     "max_repos": 3,
-    "max_files_per_repo": 2,
-    "max_files": 5,
-    "max_chars_per_file": 8000,
-    "max_total_chars": 20000,
+    "max_files_per_repo": 20,
+    "max_files": 40,
+    "max_chars_per_file": 2000,
+    "max_total_chars": 80000,
     "max_tree_files": 300,
     "max_tree_chars": 8000
   },
