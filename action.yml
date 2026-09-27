@@ -1,4 +1,4 @@
-name: 'Auto Issue'
+name: 'LLM-Auto-Issue'
 description: 'Detect spam issues and pull requests with an LLM, close them, and label the valid ones'
 author: 'action-auto-issue'
 branding:
