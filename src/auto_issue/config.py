@@ -178,6 +178,7 @@ class Inputs:
     title_prefixes: Mapping
     max_tokens: int
     content_max_chars: int
+    ai_retries: int
     max_files_to_analyze: int
     max_patch_lines_per_file: int
     request_timeout_seconds: int
@@ -218,11 +219,19 @@ def validate_config(raw):
     for name in REQUIRED_PROMPTS:
         if not raw["prompts"].get(name):
             raise ConfigurationError(f"config.json is missing the '{name}' prompt")
-    for name in ("max_tokens", "temperature", "request_timeout_seconds", "content_max_chars"):
+    for name in (
+        "max_tokens",
+        "temperature",
+        "request_timeout_seconds",
+        "content_max_chars",
+        "max_retries",
+    ):
         if not isinstance(raw["ai_settings"].get(name), (int, float)):
             raise ConfigurationError(f"config.json ai_settings.{name} must be a number")
     if raw["ai_settings"]["max_tokens"] <= 0:
         raise ConfigurationError("config.json ai_settings.max_tokens must be positive")
+    if not isinstance(raw["ai_settings"]["max_retries"], int) or raw["ai_settings"]["max_retries"] < 0:
+        raise ConfigurationError("config.json ai_settings.max_retries must be a non-negative integer")
     if not 0 <= raw["ai_settings"]["temperature"] <= 2:
         raise ConfigurationError("config.json ai_settings.temperature must be between 0 and 2")
     if set(raw["outcomes"]) != set(OUTCOMES):
@@ -436,6 +445,7 @@ def parse_inputs(environ, config):
         title_prefixes=_title_prefixes(_text(environ, "title-prefixes"), labels, config),
         max_tokens=_positive_int(environ, "max-tokens", config.ai_settings.max_tokens),
         content_max_chars=_positive_int(environ, "content-max-chars", config.ai_settings.content_max_chars),
+        ai_retries=_non_negative_int(environ, "ai-retries", config.ai_settings.max_retries),
         max_files_to_analyze=depth_settings["max_files"],
         max_patch_lines_per_file=depth_settings["max_lines"],
         request_timeout_seconds=int(config.ai_settings.request_timeout_seconds),
@@ -590,6 +600,19 @@ def _positive_int(environ, name, default):
         raise ConfigurationError(f"the '{name}' input must be an integer, got '{raw}'") from exc
     if value <= 0:
         raise ConfigurationError(f"the '{name}' input must be positive, got {value}")
+    return value
+
+
+def _non_negative_int(environ, name, default):
+    raw = _text(environ, name)
+    if not raw:
+        return int(default)
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"the '{name}' input must be an integer, got '{raw}'") from exc
+    if value < 0:
+        raise ConfigurationError(f"the '{name}' input must not be negative, got {value}")
     return value
 
 

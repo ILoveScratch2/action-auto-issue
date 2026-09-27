@@ -247,6 +247,7 @@
 
     "ai_call_start": "Calling the AI for {purpose} with model {model}",
     "ai_call_result": "{purpose} result: {result}",
+    "ai_call_retry": "{purpose} failed on attempt {attempt}/{attempts}, retrying in {delay}s: {error}",
     "ai_call_failed": "{purpose} failed: {error}",
     "ai_status_code": "HTTP status: {code}",
     "ai_response_body": "Response body: {body}",
@@ -261,7 +262,8 @@
     "max_tokens": 30000,
     "temperature": 0.1,
     "request_timeout_seconds": 60,
-    "content_max_chars": 20000
+    "content_max_chars": 20000,
+    "max_retries": 3
   },
 
   "policy": {

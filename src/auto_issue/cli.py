@@ -36,6 +36,7 @@ def build_context(environ=None):
         max_tokens=inputs.max_tokens,
         temperature=float(config.ai_settings.temperature),
         timeout=inputs.request_timeout_seconds,
+        max_retries=inputs.ai_retries,
     )
     failures = FailureCollector()
     client = GitHubClient(

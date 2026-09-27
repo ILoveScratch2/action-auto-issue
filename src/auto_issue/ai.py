@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 
 import requests
@@ -24,6 +25,9 @@ CONTENT_FILTER_MARKERS = (
     "jailbreak",
 )
 
+# Retries wait 1s, then 2s, then 4s, so a rate limited or briefly unreachable provider can recover.
+RETRY_BACKOFF_BASE_SECONDS = 1
+
 
 @dataclass(frozen=True)
 class AiSettings:
@@ -34,6 +38,7 @@ class AiSettings:
     max_tokens: int
     temperature: float
     timeout: int
+    max_retries: int
 
 
 def looks_like_content_filter(status, body_text):
@@ -99,24 +104,48 @@ def _flatten(content):
 
 
 class AiClient:
-    def __init__(self, settings, config, session=None):
+    def __init__(self, settings, config, session=None, sleep=None):
         self.settings = settings
         self.config = config
         self._session = session or requests.Session()
+        self._sleep = sleep or time.sleep
 
     def complete(self, *, instructions, payload, purpose, verdict=True, max_tokens=None):
-        """Runs one completion. ``verdict=True`` upper-cases the answer so enum parsing is stable."""
-        try:
-            return self._complete(
-                instructions=instructions,
-                payload=payload,
-                purpose=purpose,
-                verdict=verdict,
-                max_tokens=max_tokens,
-            )
-        except AutoIssueError as exc:
-            log.error(self.config.log_line("ai_call_failed", purpose=purpose, error=exc))
-            raise
+        """Runs one completion, retrying every failure that another attempt could fix.
+
+        ``verdict=True`` upper-cases the answer so enum parsing is stable. A content filter
+        rejection and an answer cut off by the token limit are not retried: the same request,
+        sent unchanged, would be answered the same way again.
+        """
+        attempts = max(1, self.settings.max_retries + 1)
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._complete(
+                    instructions=instructions,
+                    payload=payload,
+                    purpose=purpose,
+                    verdict=verdict,
+                    max_tokens=max_tokens,
+                )
+            except (ContentFilterError, TruncatedResponseError) as exc:
+                log.error(self.config.log_line("ai_call_failed", purpose=purpose, error=exc))
+                raise
+            except AutoIssueError as exc:
+                if attempt == attempts:
+                    log.error(self.config.log_line("ai_call_failed", purpose=purpose, error=exc))
+                    raise
+                delay = RETRY_BACKOFF_BASE_SECONDS * 2 ** (attempt - 1)
+                log.warning(
+                    self.config.log_line(
+                        "ai_call_retry",
+                        purpose=purpose,
+                        attempt=attempt,
+                        attempts=attempts,
+                        delay=delay,
+                        error=exc,
+                    )
+                )
+                self._sleep(delay)
 
     def _complete(self, *, instructions, payload, purpose, verdict, max_tokens=None):
         log.info(self.config.log_line("ai_call_start", purpose=purpose, model=self.settings.model))

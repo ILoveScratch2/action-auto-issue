@@ -24,6 +24,10 @@ inputs:
     description: 'API flavour to speak: chat-completions or responses'
     required: false
     default: 'chat-completions'
+  ai-retries:
+    description: 'How many times a failed AI call is retried before the run gives up (backoff 1s, 2s, 4s). 0 disables retrying. A provider content filter rejection and an answer cut off by the token limit are never retried.'
+    required: false
+    default: '3'
   labels:
     description: 'Comma separated labels the AI may apply to valid issues and pull requests'
     required: false
@@ -113,6 +117,7 @@ runs:
         INPUT_AI_KEY: ${{ inputs.ai-key }}
         INPUT_MODEL: ${{ inputs.model }}
         INPUT_AI_API_TYPE: ${{ inputs.ai-api-type }}
+        INPUT_AI_RETRIES: ${{ inputs.ai-retries }}
         INPUT_LABELS: ${{ inputs.labels }}
         INPUT_APPLY_LABELS: ${{ inputs.apply-labels }}
         INPUT_SEARCH_HISTORY: ${{ inputs.search-history }}

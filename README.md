@@ -60,6 +60,7 @@ You can set `ai-api-type: responses` to use the responses API.
 | `ai-key` | No (**required**) | API key, keep it in a secret. |
 | `model` | `gpt-4o` | Model used for every check. |
 | `ai-api-type` | `chat-completions` | `chat-completions` or `responses`. |
+| `ai-retries` | `3` | Times a failed AI call is retried, waiting 1s, 2s, 4s. `0` disables retrying. A content filter rejection and an answer cut off by the token limit are never retried, since the same request would be answered the same way. |
 | `labels` | `bug,enhancement,question` | Labels the AI may apply. |
 | `apply-labels` | `true` | Write labels at all, both the AI's pick and the `outcomes` labels. |
 | `search-history` | `false` | Search past issues and pull requests for duplicates and answering material. |
